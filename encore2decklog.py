@@ -1,19 +1,16 @@
 import asyncio
 from playwright.async_api import async_playwright
-from bs4 import BeautifulSoup
 from collections import Counter
-import json
 import sys
 
 async def getEncoreDecks(url):
-    print('getEncoreDecks')
     async with async_playwright() as playw:
         browser = await playw.chromium.launch(headless=True)
         page = await browser.new_page()
         async with page.expect_response(lambda r: "/api/deck/" in r.url) as response_info:
             await page.goto(url, wait_until="networkidle")
         response = await response_info.value
-        browser.close()
+        await browser.close()
         return await response.json()
 
     
@@ -40,7 +37,7 @@ async def postRequestDecklog(payload):
         page = await browser.new_page()
         await page.goto("https://decklog-en.bushiroad.com/", wait_until="networkidle")
         result = await page.evaluate("""async (payload) => { const res = await fetch("https://decklog-en.bushiroad.com/system/app/api/publish/2", {method: "POST", headers: {"Content-Type": "application/json;charset=utf-8"}, body: JSON.stringify(payload)}); return {status: res.status, body: await res.json()};}""", payload)
-        browser.close()
+        await browser.close()
     return result
 
 async def prepRequest(cardcode, cardq):
@@ -59,15 +56,28 @@ async def prepRequest(cardcode, cardq):
 
 def main():
     encoredecks = sys.argv[1]
-    print(encoredecks)
     if encoredecks != "":
+        print('fetching encore decks: In progress', flush=True)
+
         deck_data = asyncio.run(getEncoreDecks(encoredecks))
+
+        print('fetching encore decks: Success!')
+        print('converting to suitable decklog format: In progress', flush=True)
+
         cardcode, cardq = convertEncore2Decklog(deck_data)
         request_template = asyncio.run(prepRequest(cardcode, cardq))
+
+        print('converting to suitable decklog format: Success!')
+        print('uploading to decklog: In progress', flush=True)
+
         response = asyncio.run(postRequestDecklog(request_template))
-        print(response)
+
+        print('uploading to decklog: Success!')
+
+        print('Decklist should be available at:')
+        print("https://decklog-en.bushiroad.com/view/"+str(response['deck_id']))
     else:
-        print('error')
+        print('Something went wrong!!')
 
 request_template = {
     "id": "",
