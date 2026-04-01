@@ -12,4 +12,4 @@ requires playwright:
 pip install playwright
 ```
 
-only tested for use with english decks
+only tested for use with english decks and cards
