@@ -1,7 +1,15 @@
 # Encoredecks to bushinavi decklog converter
 
-python encore2decklog {encoredecksurl} {newdeckname}
+Convert a https://encoredecks.com decklist into a https://decklog-en.bushiroad.com/ decklist and returns a decklog url
 
-returns the decklog code for your deck
+use following to run:
+```
+python encore2decklog <encoredecks url> <decklog deckname>
+```
 
-only use for english decks
+requires playwright:
+```
+pip install playwright
+```
+
+only tested for use with english decks
