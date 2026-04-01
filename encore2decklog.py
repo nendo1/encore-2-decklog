@@ -10,13 +10,10 @@ async def getEncoreDecks(url):
         async with page.expect_response(lambda r: "/api/deck/" in r.url) as response_info:
             await page.goto(url, wait_until="networkidle")
         response = await response_info.value
-        await browser.close()
         return await response.json()
 
     
 def convertEncore2Decklog(deck_data):
-    print('convertencoredecks')
-    print(deck_data)
     #hardcoded attributes if encore deck changes them need to update
     decklog_deck = []
     cards = deck_data['cards']
@@ -31,18 +28,16 @@ def convertEncore2Decklog(deck_data):
     return cardcodes, cardquantity
 
 async def postRequestDecklog(payload):
-    print('postdecklog')
     async with async_playwright() as playw:
         browser = await playw.chromium.launch(headless=True)
         page = await browser.new_page()
         await page.goto("https://decklog-en.bushiroad.com/", wait_until="networkidle")
         result = await page.evaluate("""async (payload) => { const res = await fetch("https://decklog-en.bushiroad.com/system/app/api/publish/2", {method: "POST", headers: {"Content-Type": "application/json;charset=utf-8"}, body: JSON.stringify(payload)}); return {status: res.status, body: await res.json()};}""", payload)
-        await browser.close()
     return result
 
 async def prepRequest(cardcode, cardq):
         title = 'test'
-        if sys.argv[2] != "":
+        if sys.argv[2]:
             title = str(sys.argv[2])
 
         setcode = cardcode[0].split("/")[0]
@@ -57,25 +52,30 @@ async def prepRequest(cardcode, cardq):
 def main():
     encoredecks = sys.argv[1]
     if encoredecks != "":
-        print('fetching encore decks: In progress', flush=True)
+        print('Fetching encore decks: In progress', end="", flush=True)
 
         deck_data = asyncio.run(getEncoreDecks(encoredecks))
 
-        print('fetching encore decks: Success!')
-        print('converting to suitable decklog format: In progress', flush=True)
+        print('Fetching encore decks: Success!')
+        print('Converting to suitable decklog format: In progress', end="", flush=True)
 
         cardcode, cardq = convertEncore2Decklog(deck_data)
         request_template = asyncio.run(prepRequest(cardcode, cardq))
 
-        print('converting to suitable decklog format: Success!')
-        print('uploading to decklog: In progress', flush=True)
+        print('Converting to suitable decklog format: Success!')
+        print('Uploading to decklog: In progress', end="", flush=True)
 
         response = asyncio.run(postRequestDecklog(request_template))
 
-        print('uploading to decklog: Success!')
+        if(response['status'] == 200):
+            print('Uploading to decklog: Success!')
 
-        print('Decklist should be available at:')
-        print("https://decklog-en.bushiroad.com/view/"+str(response['deck_id']))
+            print('Decklist should be available at:')
+            print("https://decklog-en.bushiroad.com/view/"+str(response['body']['deck_id']))
+        else:
+            print('Something went uploading')
+            print("Response: "+ str(response['status']))
+
     else:
         print('Something went wrong!!')
 
