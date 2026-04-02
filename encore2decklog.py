@@ -15,9 +15,18 @@ async def getEncoreDecks(url):
     
 def convertEncore2Decklog(deck_data):
     #hardcoded attributes if encore deck changes them need to update
+    language = -1
     decklog_deck = []
     cards = deck_data['cards']
     for card in cards:
+        if language == -1:
+            language = card['lang']
+
+        if card['lang'] != language:
+            print("Failed!")
+            print("Mixed language decks are not supported!")
+            exit()
+
         decklog_deck.append(card['cardcode'].strip())
     
     counts = Counter(decklog_deck)
@@ -25,24 +34,30 @@ def convertEncore2Decklog(deck_data):
     cardcodes = list(counts.keys())
     cardquantity = list(counts.values())
 
-    return cardcodes, cardquantity
+    return cardcodes, cardquantity, language
 
-async def postRequestDecklog(payload):
+async def postRequestDecklog(payload, language):
     async with async_playwright() as playw:
         browser = await playw.chromium.launch(headless=True)
         page = await browser.new_page()
-        await page.goto("https://decklog-en.bushiroad.com/", wait_until="networkidle")
-        result = await page.evaluate("""async (payload) => { const res = await fetch("https://decklog-en.bushiroad.com/system/app/api/publish/2", {method: "POST", headers: {"Content-Type": "application/json;charset=utf-8"}, body: JSON.stringify(payload)}); return {status: res.status, body: await res.json()};}""", payload)
+        await page.goto(URL_dict[language], wait_until="networkidle")
+        result = await page.evaluate("""async ({payload, url}) => { const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json;charset=utf-8"}, body: JSON.stringify(payload)}); return {status: res.status, body: await res.json()};}""", {"payload": payload, "url": API_dict[language]})
     return result
 
-async def prepRequest(cardcode, cardq):
+async def prepRequest(cardcode, cardq, language):
         title = 'test'
         if sys.argv[2]:
             title = str(sys.argv[2])
 
         setcode = cardcode[0].split("/")[0]
         setcode = "##" + setcode.strip() + "##"
-        request = request_template
+        if language == "EN":
+            request = request_template
+        else:
+            print("Failed!")
+            print("JP uploads not yet supported!")
+            exit()
+            #request = request_template_JP
         request['title'] = title
         request['no'] = cardcode
         request['num'] = cardq
@@ -52,28 +67,30 @@ async def prepRequest(cardcode, cardq):
 def main():
     encoredecks = sys.argv[1]
     if encoredecks != "":
-        print('Fetching encore decks: In progress', end="", flush=True)
+        print('Fetching encore decks...  ', end='', flush=True)
 
         deck_data = asyncio.run(getEncoreDecks(encoredecks))
 
-        print('Fetching encore decks: Success!')
-        print('Converting to suitable decklog format: In progress', end="", flush=True)
+        print('Success!')
+        print('Converting to suitable decklog format...  ', end='')
 
-        cardcode, cardq = convertEncore2Decklog(deck_data)
-        request_template = asyncio.run(prepRequest(cardcode, cardq))
+        cardcode, cardq, language = convertEncore2Decklog(deck_data)
+        
+        new_request_template = asyncio.run(prepRequest(cardcode, cardq, language))
 
-        print('Converting to suitable decklog format: Success!')
-        print('Uploading to decklog: In progress', end="", flush=True)
+        print('Success!')
+        print('Uploading to decklog...  ', end='')
 
-        response = asyncio.run(postRequestDecklog(request_template))
+        response = asyncio.run(postRequestDecklog(new_request_template, language))
 
         if(response['status'] == 200):
-            print('Uploading to decklog: Success!')
+            print('Success!')
 
             print('Decklist should be available at:')
-            print("https://decklog-en.bushiroad.com/view/"+str(response['body']['deck_id']))
+            print(str(URL_dict[language])+"view/"+str(response['body']['deck_id']))
         else:
-            print('Something went uploading')
+            print('Failed!')
+            print('Something went wrong uploading')
             print("Response: "+ str(response['status']))
 
     else:
@@ -99,6 +116,18 @@ request_template = {
     "has_session": False,
     "token_id": "",
     "token": ""
+}
+
+request_template_JP = {"id":"","deck_id":"","title":"mycopy","post_deckrecipe":1,"memo":"","deck_param1":"N","deck_param2":"##IMS##IAS##","add_param1":"","add_param2":"","no":["IMS/S93-059","IMS/S93-086","IMS/S93-087","IMS/S93-100","IMS/S93-067","IMS/S93-076","IMS/S93-096","IAS/S93-045","IMS/S93-065BNP","IAS/S93-010","IMS/S93-007","IMS/S93-069BNP","IMS/S93-052","IMS/S93-044","IMS/S93-048","IAS/S61-106","IMS/S93-088","IMS/S93-110BNP","IMS/S93-P05","IMS/S93-119","IMS/S93-122"],"num":[1,2,4,1,2,2,1,4,1,3,1,3,1,3,2,2,4,4,1,4,4],"sub_no":[],"sub_num":[],"p_no":[],"p_num":[],"p_slot":[],"has_session":False,"token_id":"","token":""}
+
+URL_dict = {
+    "JP": "https://decklog.bushiroad.com/",
+    "EN": "https://decklog-en.bushiroad.com/"
+}
+
+API_dict = {
+    "JP": "https://decklog.bushiroad.com/system/app/api/publish/2",
+    "EN": "https://decklog-en.bushiroad.com/system/app/api/publish/2"
 }
 
 main()
